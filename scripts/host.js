@@ -110,54 +110,69 @@
     });
 
     communicator.subscribe(Topics.ICE_ZONES, function (message) {
-
-        var params = {
+        var iceItems = message;
+        /* var params = {
             iceRef: message.iceRef,
             position: message.position
-        }
-        var currentPath = (message.path) ? message.path : CStudioAuthoring.SelectedContent.getSelectedContent()[0].uri;
-        var isLockOwner = function (lockOwner){
+        }; */
+        var iceItemsPaths = iceItems.map(function(item) {
+            return (item.path) ? item.path : CStudioAuthoring.SelectedContent.getSelectedContent()[0].uri;
+        });
+        
+        //var currentPath = (message.path) ? message.path : CStudioAuthoring.SelectedContent.getSelectedContent()[0].uri;
+        var isLockOwner = function (lockOwner, item){
             if (lockOwner != '' && lockOwner != null && CStudioAuthoringContext.user != lockOwner) {
-                params.class = 'lock';
+                return 'lock';
             }
+            return item.class;
         }
 
         var permsCallback = {
             success: function (response) {
-                var isWrite = CStudioAuthoring.Service.isWrite(response.permissions);
+                iceItems.map(function(item, index) { // attach permissions data
+                    item.permissions = response[index].permissions;
+                    item.isWrite = CStudioAuthoring.Service.isWrite(item.permissions);
+                    return item;
+                });
 
-                if (!message.path) {
-                    if (isWrite) {
-                        isLockOwner(CStudioAuthoring.SelectedContent.getSelectedContent()[0].lockOwner);
+                iceItems.filter(function(item) { // do for items that have not provided the path
+                    return (!item.path);
+                }).forEach(function(item) {
+                    if (item.isWrite) {
+                        item.class = isLockOwner(CStudioAuthoring.SelectedContent.getSelectedContent()[0].lockOwner, item);
                     }else {
-                        params.class = 'read';
+                        item.class = 'read';
                     }
-                    communicator.publish(Topics.ICE_TOOLS_INDICATOR, params);
-                } else {
-                    var itemCallback = {
-                        success: function (contentTO) {
-                            isLockOwner(contentTO.item.lockOwner);
-                            communicator.publish(Topics.ICE_TOOLS_INDICATOR, params);
-                        },failure: function () {}
-                    }
+                    communicator.publish(Topics.ICE_TOOLS_INDICATOR, item);
+                });
 
-                    if (isWrite) {
-                        CStudioAuthoring.Service.lookupContentItem(
-                            CStudioAuthoringContext.site,
-                            currentPath,
-                            itemCallback,
-                            false, false);
-                    } else {
-                        params.class = 'read';
-                    }
+                var validIceItems = iceItems.filter(function(item) { // return valid items
+                    return (item.path && item.isWrite);
+                });
+
+                var validIceItemsPaths = validIceItems.map(function(item) { return item.path}); // retrieve just the paths so we can call the service with just paths array
+
+                var itemCallback = {
+                    success: function (responseItems) {
+                        validIceItems.forEach(function(item, index) { // start showing the pencils once response is ready
+                            item.class = isLockOwner(responseItems[index].item.lockOwner, item);
+                            communicator.publish(Topics.ICE_TOOLS_INDICATOR, item);
+                        });
+                    },failure: function () {}
                 }
+
+                CStudioAuthoring.Service.batchLookupContentItem(
+                        CStudioAuthoringContext.site,
+                        validIceItemsPaths,
+                        itemCallback,
+                        false, false);
 
             },failure: function () {}
         }
 
-        CStudioAuthoring.Service.getUserPermissions(
+        CStudioAuthoring.Service.getBatchUserPermissions(
             CStudioAuthoringContext.site,
-            currentPath,
+            iceItemsPaths,
             permsCallback);
 
     });

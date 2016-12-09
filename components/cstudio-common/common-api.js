@@ -2467,6 +2467,7 @@ var parentSaveCb = {
             getContentUri: "/api/1/services/api/1/content/get-content.json",
             contentExistsUrl: "/api/1/services/api/1/content/content-exists.json",
             lookupContentItemServiceUri: "/api/1/services/api/1/content/get-item.json",
+            batchLookupContentItemServiceUri: "http://localhost:8081/get-batch-items.json", // TODO: update with real service
             getVersionHistoryServiceUrl: "/api/1/services/api/1/content/get-item-versions.json",
             lookupContentServiceUri: "/api/1/services/api/1/content/get-items-tree.json",
             searchServiceUrl: "/api/1/services/api/1/content/search.json",
@@ -2511,6 +2512,7 @@ var parentSaveCb = {
 
             // Security Services
             getPermissionsServiceUrl: "/api/1/services/api/1/security/get-user-permissions.json",
+            getBatchPermissionsServiceUrl: "http://localhost:8081/get-batch-user-permissions.json", // TODO: update with real service
             lookupAuthoringRoleServiceUrl : "/api/1/services/api/1/security/get-user-roles.json",
             verifyAuthTicketUrl: "/api/1/services/api/1/user/validate-token.json",
             logoutUrl: "/api/1/services/api/1/user/logout.json",
@@ -3400,6 +3402,31 @@ var parentSaveCb = {
                 YConnect.asyncRequest('GET', this.createServiceUri(serviceUrl), serviceCallback);
             },
 
+            getBatchUserPermissions: function(site, paths, callback) {
+                var Utils = CStudioAuthoring.Utils;
+
+                var serviceUrl = this.getBatchPermissionsServiceUrl;
+                serviceUrl = Utils.addURLParameter(serviceUrl, "site", site);
+                serviceUrl = Utils.addURLParameter(serviceUrl, "user", CStudioAuthoringContext.user);
+
+                var serviceCallback = {
+                    success: function(jsonResponse) {
+                        var results = eval("(" + jsonResponse.responseText + ")");
+                        callback.success(results);
+                    },
+                    failure: function(response) {
+                        callback.failure(response);
+                    }
+                };
+
+                CStudioAuthoring.Service.request({
+                    method: "GET", // TODO: change to POST once service ready
+                    data: JSON.stringify(paths),
+                    url: serviceUrl, // TODO: this.createServiceUri(serviceUrl), // USE create service when real service is ready
+                    callback: serviceCallback
+                });
+            },
+
             /**
              * look at perms to see if there is a write in the group
              */
@@ -3898,8 +3925,49 @@ var parentSaveCb = {
                     }
                 };
 
-
                 YConnect.asyncRequest("GET", this.createServiceUri(serviceUri), serviceCallback);
+            },
+
+            /**
+             * lookup content items, but returns an array of content items
+             */
+            batchLookupContentItem: function(site, paths, callback, isDraft, populateDependencies) {
+                var Utils = CStudioAuthoring.Utils;
+
+                var serviceUri = this.batchLookupContentItemServiceUri;
+                serviceUri = Utils.addURLParameter(serviceUri, "site", site);
+
+                if (isDraft) {
+                    serviceUri = serviceUri + "&draft=true";
+                }
+
+                if (populateDependencies != undefined && !populateDependencies) {
+                    serviceUri = Utils.addURLParameter(serviceUri, "populateDependencies", "false");
+                }
+                serviceUri = Utils.addURLParameter(serviceUri, "nocache", new Date());
+
+                var serviceCallback = {
+                    success: function(response) {
+                        var contentResults = eval("(" + response.responseText + ")");
+
+                        try {
+                            callback.success(contentResults, callback.argument);
+                        }
+                        catch(err) {
+                        }
+                    },
+
+                    failure: function(response) {
+                        callback.failure("error loading data", callback.argument);
+                    }
+                };
+
+                CStudioAuthoring.Service.request({
+                    method: "GET", // TODO: change to POST once service ready
+                    data: JSON.stringify(paths),
+                    url: serviceUri, // TODO: this.createServiceUri(serviceUri), // USE create service when real service is ready
+                    callback: serviceCallback
+                });
             },
 
             /**

@@ -119,7 +119,7 @@ define('guest', ['crafter', 'jquery', 'communicator', 'ice-overlay', 'dnd-contro
 
         $elem.attr('data-studio-ice-target', iceRef);
 
-        communicator.publish(Topics.ICE_ZONES, params);
+        return params;
     }
 
     communicator.on(Topics.ICE_TOOLS_INDICATOR, function (message) {
@@ -147,13 +147,14 @@ define('guest', ['crafter', 'jquery', 'communicator', 'ice-overlay', 'dnd-contro
     function initICERegions() {
         removeICERegions();
         var elems = document.querySelectorAll('[data-studio-ice]');
-
+        var iceItems = [];
         for (var i = 0; i < elems.length; ++i) {
-            initICETarget(elems[i]);
+            iceItems.push(initICETarget(elems[i]));
             if(elems[i].getAttribute("data-studio-ice-label")){
                 elems[i].setAttribute("data-studio-ice-label", elems[i].getAttribute("data-studio-ice-label").replace(/ /g, "__"));
             }
         }
+        communicator.publish(Topics.ICE_ZONES, iceItems);
     }
 
     function removeICERegions(){
